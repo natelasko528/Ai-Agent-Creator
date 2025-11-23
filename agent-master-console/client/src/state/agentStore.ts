@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { API_BASE_URL } from '../config'
 
 interface Agent {
   id: string
@@ -24,18 +25,33 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   modal: false,
 
   loadAgents: async () => {
-    const res = await fetch('http://localhost:8000/agents')
+    const res = await fetch(`${API_BASE_URL}/agents`)
     const agents: Agent[] = await res.json()
-    set({ agents })
+    set((state) => ({
+      agents,
+      selectedAgent:
+        state.selectedAgent && agents.some((a) => a.id === state.selectedAgent?.id)
+          ? agents.find((a) => a.id === state.selectedAgent?.id) ?? null
+          : agents[0] ?? null,
+    }))
   },
 
   createAgent: async (data) => {
-    await fetch('http://localhost:8000/agents', {
+    const res = await fetch(`${API_BASE_URL}/agents`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
-    get().loadAgents()
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}))
+      const detail = (payload as { detail?: string }).detail
+      throw new Error(detail || 'Failed to create agent')
+    }
+    const created: Agent = await res.json()
+    set((state) => ({
+      agents: [...state.agents, created],
+      selectedAgent: created,
+    }))
   },
 
   selectAgent: (a) => set({ selectedAgent: a }),

@@ -8,13 +8,13 @@ export default function App() {
   const load = useAgentStore((s) => s.loadAgents)
   useEffect(() => {
     load()
-  }, [])
+  }, [load])
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
-      <CreateAgentModal />
       <AgentSidebar />
       <ChatWindow />
+      <CreateAgentModal />
     </div>
   )
 }
