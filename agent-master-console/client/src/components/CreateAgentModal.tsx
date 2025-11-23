@@ -16,6 +16,7 @@ export default function CreateAgentModal() {
     tools: [] as string[],
   })
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   const toggleTool = (tool: string) => {
     setForm((prev) => ({
@@ -29,10 +30,17 @@ export default function CreateAgentModal() {
   const submit = async () => {
     if (!form.name.trim()) return
     setSaving(true)
-    await createAgent(form)
-    setSaving(false)
-    setForm({ name: '', model: 'gpt-4.1-mini', system_prompt: '', tools: [] })
-    setModal(false)
+    try {
+      await createAgent(form)
+      setForm({ name: '', model: 'gpt-4.1-mini', system_prompt: '', tools: [] })
+      setError('')
+      setModal(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create agent'
+      setError(message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (!modal) return null
@@ -41,6 +49,7 @@ export default function CreateAgentModal() {
       <div className="bg-gray-800 p-6 rounded w-96 shadow-xl">
         <h2 className="text-xl font-semibold mb-4">Create a New Agent</h2>
         <div className="space-y-3">
+          {error && <p className="text-red-400 text-sm">{error}</p>}
           <div>
             <label className="block text-sm text-gray-400 mb-1">Name</label>
             <input

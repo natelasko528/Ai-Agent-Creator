@@ -42,6 +42,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}))
+      const detail = (payload as { detail?: string }).detail
+      throw new Error(detail || 'Failed to create agent')
+    }
     const created: Agent = await res.json()
     set((state) => ({
       agents: [...state.agents, created],
