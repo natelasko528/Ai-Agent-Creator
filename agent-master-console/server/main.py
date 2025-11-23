@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -24,10 +25,26 @@ app = FastAPI(title="Agent Master Console API")
 registry = AgentRegistry()
 runtime = AgentRuntime(registry)
 
+default_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+]
+
+env_origins = os.getenv("ALLOWED_ORIGINS")
+allow_origins = (
+    [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+    if env_origins
+    else default_origins
+)
+
+allow_credentials = "*" not in allow_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production
-    allow_credentials=True,
+    allow_origins=allow_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
