@@ -173,6 +173,15 @@ export default function ChatWindow() {
       <div className="mt-4 flex">
         <input
           value={input}
+          onChange={(e) => setInput(e.target.value)}
+          data-testid="chat-input"
+          className="flex-1 bg-gray-800 p-2 rounded"
+        />
+        <button onClick={send} data-testid="send-message-button" className="ml-2 bg-green-500 p-2 rounded">
+          Send
+        </button>
+      </div>
+    </div>
           disabled={!selectedAgent || status === 'error' || status === 'idle'}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
