@@ -45,3 +45,4 @@ pytest
 ```
 
 The test creates an agent, lists agents, and sends a message over WebSockets to ensure the flow works end to end.
+This directory contains the primary files for the Agent Master Console. See individual subdirectories for details and usage.
