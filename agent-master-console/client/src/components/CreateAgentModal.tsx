@@ -5,6 +5,8 @@ const AVAILABLE_TOOLS = [
   { id: 'web_search', label: 'Web search' },
 ]
 
+const DEFAULT_SYSTEM_PROMPT = 'You are a helpful assistant.'
+
 export default function CreateAgentModal() {
   const modal = useAgentStore((s) => s.modal)
   const setModal = useAgentStore((s) => s.setModal)
@@ -12,7 +14,7 @@ export default function CreateAgentModal() {
   const [form, setForm] = useState({
     name: '',
     model: 'gpt-4.1-mini',
-    system_prompt: '',
+    system_prompt: DEFAULT_SYSTEM_PROMPT,
     tools: [] as string[],
   })
   const [saving, setSaving] = useState(false)
@@ -29,10 +31,22 @@ export default function CreateAgentModal() {
 
   const submit = async () => {
     if (!form.name.trim()) return
+    const payload = {
+      ...form,
+      name: form.name.trim(),
+      ...(form.system_prompt.trim()
+        ? { system_prompt: form.system_prompt }
+        : {}),
+    }
     setSaving(true)
     try {
-      await createAgent(form)
-      setForm({ name: '', model: 'gpt-4.1-mini', system_prompt: '', tools: [] })
+      await createAgent(payload)
+      setForm({
+        name: '',
+        model: 'gpt-4.1-mini',
+        system_prompt: DEFAULT_SYSTEM_PROMPT,
+        tools: [],
+      })
       setError('')
       setModal(false)
     } catch (err) {
