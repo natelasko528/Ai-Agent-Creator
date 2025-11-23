@@ -12,50 +12,114 @@ export default function ChatWindow() {
   const setModal = useAgentStore((s) => s.setModal)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
-  const [connected, setConnected] = useState(false)
+  const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error'>(
+    'idle'
+  )
+  const [statusMessage, setStatusMessage] = useState('')
   const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const messageQueue = useRef<string[]>([])
 
   useEffect(() => {
     setMessages([])
+    setStatus(selectedAgent ? 'connecting' : 'idle')
+    setStatusMessage('')
+
     if (!selectedAgent) {
       if (wsRef.current) {
         wsRef.current.close()
       }
       wsRef.current = null
-      setConnected(false)
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current)
+      }
       return
     }
 
-    const socket = new WebSocket(`${WS_BASE_URL}/ws/${selectedAgent.id}`)
-    socket.onopen = () => setConnected(true)
-    socket.onclose = () => setConnected(false)
-    socket.onerror = () => setConnected(false)
-    socket.onmessage = (event) => {
-      const chunk = event.data as string
-      setMessages((prev) => {
-        if (prev.length === 0 || prev[prev.length - 1].role !== 'assistant') {
-          return [...prev, { role: 'assistant', content: chunk }]
+    let stopped = false
+    let attempts = 0
+
+    const connect = () => {
+      if (stopped) return
+      const isRetry = attempts > 0
+      setStatus(isRetry ? 'reconnecting' : 'connecting')
+      setStatusMessage(isRetry ? 'Reconnecting…' : 'Connecting…')
+
+      const socket = new WebSocket(`${WS_BASE_URL}/ws/${selectedAgent.id}`)
+      wsRef.current = socket
+
+      socket.onopen = () => {
+        if (stopped) return
+        setStatus('connected')
+        setStatusMessage('')
+        attempts = 0
+        messageQueue.current.forEach((queued) => socket.send(queued))
+        messageQueue.current = []
+      }
+
+      socket.onmessage = (event) => {
+        const chunk = event.data as string
+        setMessages((prev) => {
+          if (prev.length === 0 || prev[prev.length - 1].role !== 'assistant') {
+            return [...prev, { role: 'assistant', content: chunk }]
+          }
+          const next = [...prev]
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            content: next[next.length - 1].content + chunk,
+          }
+          return next
+        })
+      }
+
+      socket.onerror = () => {
+        if (stopped) return
+        setStatus('disconnected')
+        setStatusMessage('Connection error. Retrying…')
+        socket.close()
+      }
+
+      socket.onclose = (event) => {
+        if (stopped) return
+        if (event.code === 4404) {
+          setStatus('error')
+          setStatusMessage(event.reason || 'Agent not found')
+          return
         }
-        const next = [...prev]
-        next[next.length - 1] = {
-          ...next[next.length - 1],
-          content: next[next.length - 1].content + chunk,
-        }
-        return next
-      })
+        setStatus('disconnected')
+        setStatusMessage('Connection lost. Retrying…')
+        attempts += 1
+        const delay = Math.min(1000 * 2 ** (attempts - 1), 10000)
+        reconnectTimer.current = setTimeout(connect, delay)
+      }
     }
-    wsRef.current = socket
+
+    connect()
+
     return () => {
-      socket.close()
+      stopped = true
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current)
+      }
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
       wsRef.current = null
     }
   }, [selectedAgent])
 
   const send = () => {
     const text = input.trim()
-    if (!selectedAgent || !text || wsRef.current?.readyState !== WebSocket.OPEN) return
+    if (!selectedAgent || !text || status === 'error') return
+
     setMessages((prev) => [...prev, { role: 'user', content: text }, { role: 'assistant', content: '' }])
-    wsRef.current.send(text)
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(text)
+    } else {
+      messageQueue.current.push(text)
+    }
+
     setInput('')
   }
 
@@ -77,8 +141,20 @@ export default function ChatWindow() {
           <h2 className="text-xl font-semibold">{selectedAgent.name}</h2>
           <p className="text-sm text-gray-400">Model: {selectedAgent.model}</p>
         </div>
-        <span className={`text-sm ${connected ? 'text-green-400' : 'text-red-400'}`}>
-          {connected ? 'Connected' : 'Offline'}
+        <span
+          className={`text-sm ${
+            status === 'connected'
+              ? 'text-green-400'
+              : status === 'error'
+                ? 'text-red-400'
+                : 'text-yellow-400'
+          }`}
+        >
+          {status === 'connected'
+            ? 'Connected'
+            : status === 'error'
+              ? statusMessage || 'Error'
+              : statusMessage || 'Connecting…'}
         </span>
       </div>
       <div className="flex-1 overflow-y-auto space-y-4 bg-gray-800/40 rounded p-4">
@@ -97,7 +173,7 @@ export default function ChatWindow() {
       <div className="mt-4 flex">
         <input
           value={input}
-          disabled={!connected}
+          disabled={!selectedAgent || status === 'error' || status === 'idle'}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -106,11 +182,17 @@ export default function ChatWindow() {
             }
           }}
           className="flex-1 bg-gray-800 p-3 rounded disabled:opacity-50"
-          placeholder={connected ? 'Send a message' : 'Connecting...'}
+          placeholder={
+            status === 'connected'
+              ? 'Send a message'
+              : status === 'error'
+                ? statusMessage || 'Unable to connect'
+                : 'Connecting...'
+          }
         />
         <button
           onClick={send}
-          disabled={!connected || !input.trim()}
+          disabled={!selectedAgent || status === 'error' || !input.trim()}
           className="ml-2 bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-600 px-4 rounded"
         >
           Send
