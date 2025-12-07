@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
-from .server import get_orchestrator
+from .deps import get_orchestrator
 from ..agents.orchestrator import AgentOrchestrator
 
 

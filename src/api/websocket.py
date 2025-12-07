@@ -4,7 +4,7 @@ import json
 from typing import Dict, Set, Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .server import get_orchestrator
+from .deps import get_orchestrator
 
 
 ws_router = APIRouter()

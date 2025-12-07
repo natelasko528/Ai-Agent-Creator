@@ -1,25 +1,19 @@
 """FastAPI server for the AI Digital Assistant."""
 from contextlib import asynccontextmanager
-from typing import Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from .routes import router
-from .websocket import ws_router
+from .deps import set_orchestrator
 from ..agents.orchestrator import AgentOrchestrator
-
-
-# Global orchestrator instance
-orchestrator: Optional[AgentOrchestrator] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global orchestrator
-    orchestrator = AgentOrchestrator()
+    orch = AgentOrchestrator()
+    set_orchestrator(orch)
 
     # Register default agents
     from ..tools.code_tools import read_file, write_file, edit_file, run_code
@@ -32,7 +26,7 @@ async def lifespan(app: FastAPI):
         FunctionTool(func=run_code),
     ]
 
-    orchestrator.create_agent(
+    orch.create_agent(
         name="assistant",
         description="Main AI assistant for general tasks",
         instruction="""You are a helpful AI assistant with access to code editing and execution tools.
@@ -40,7 +34,7 @@ async def lifespan(app: FastAPI):
         tools=code_tools,
     )
 
-    orchestrator.create_agent(
+    orch.create_agent(
         name="coder",
         description="Specialized coding assistant",
         instruction="""You are an expert programmer. Write clean, efficient, well-documented code.
@@ -52,7 +46,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup
-    orchestrator = None
+    set_orchestrator(None)
 
 
 def create_api() -> FastAPI:
@@ -73,7 +67,10 @@ def create_api() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Include routers
+    # Include routers (imported here to avoid circular imports)
+    from .routes import router
+    from .websocket import ws_router
+
     app.include_router(router, prefix="/api")
     app.include_router(ws_router)
 
@@ -83,10 +80,3 @@ def create_api() -> FastAPI:
         app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
 
     return app
-
-
-def get_orchestrator() -> AgentOrchestrator:
-    """Get the global orchestrator instance."""
-    if orchestrator is None:
-        raise RuntimeError("Orchestrator not initialized")
-    return orchestrator
