@@ -65,12 +65,12 @@ async def chat(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/agents", response_model=List[str])
+@router.get("/agents", response_model=List[AgentInfo])
 async def list_agents(
     orchestrator: AgentOrchestrator = Depends(get_orchestrator),
 ):
-    """List all registered agents."""
-    return orchestrator.list_agents()
+    """List all registered agents with metadata."""
+    return orchestrator.list_agent_details()
 
 
 @router.get("/agents/{name}", response_model=AgentInfo)

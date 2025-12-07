@@ -12,7 +12,7 @@ from .base import BaseAgent, AgentConfig
 class OrchestratorConfig(BaseModel):
     """Configuration for the orchestrator."""
     name: str = "master_orchestrator"
-    model: str = "gemini-2.5-flash"
+    model: str = "gemini-3.0-pro"
     max_parallel_agents: int = 5
     timeout_seconds: int = 300
 
@@ -160,3 +160,14 @@ class AgentOrchestrator:
     def list_agents(self) -> List[str]:
         """List all registered agent names."""
         return list(self._agents.keys())
+
+    def list_agent_details(self) -> List[Dict[str, Any]]:
+        """List registered agents with descriptions and models."""
+        details = []
+        for name, agent in self._agents.items():
+            details.append({
+                "name": name,
+                "description": getattr(agent, "description", ""),
+                "model": getattr(agent, "model", self.config.model),
+            })
+        return details
