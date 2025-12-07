@@ -35,7 +35,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [agents, setAgents] = useState<Agent[]>([])
-  const [selectedAgent, setSelectedAgent] = useState('assistant')
+  const [selectedAgent, setSelectedAgent] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -60,7 +60,15 @@ function App() {
     try {
       const res = await fetch('/api/agents')
       const data = await res.json()
-      setAgents(data.map((name: string) => ({ name, description: '', model: '' })))
+      const parsed = (data as Agent[]).map((agent) => ({
+        ...agent,
+        description: agent.description || 'High-velocity Gemini agent',
+        model: agent.model || 'gemini-3.0-pro',
+      }))
+      setAgents(parsed)
+      if (!selectedAgent && parsed.length) {
+        setSelectedAgent(parsed[0].name)
+      }
     } catch (err) {
       console.error('Failed to fetch agents:', err)
     }
@@ -85,7 +93,7 @@ function App() {
     if (data.type === 'event' && data.content) {
       setMessages((prev) => {
         const lastMsg = prev[prev.length - 1]
-        if (lastMsg?.role === 'assistant' && lastMsg.agent === selectedAgent) {
+        if (lastMsg?.role === 'assistant' && lastMsg.agent === activeAgent) {
           return [
             ...prev.slice(0, -1),
             { ...lastMsg, content: lastMsg.content + data.content },
@@ -98,7 +106,7 @@ function App() {
             role: 'assistant',
             content: data.content,
             timestamp: new Date(),
-            agent: selectedAgent,
+            agent: activeAgent,
           },
         ]
       })
@@ -129,6 +137,8 @@ function App() {
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isLoading) return
 
+    const agentName = selectedAgent || agents[0]?.name || 'assistant'
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -144,7 +154,7 @@ function App() {
       ws.send(
         JSON.stringify({
           type: 'chat',
-          agent: selectedAgent,
+          agent: agentName,
           message: input,
           session_id: sessionId,
         })
@@ -157,7 +167,7 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: input,
-            agent: selectedAgent,
+            agent: agentName,
             session_id: sessionId,
           }),
         })
@@ -170,7 +180,7 @@ function App() {
             role: 'assistant',
             content: data.response,
             timestamp: new Date(),
-            agent: selectedAgent,
+            agent: agentName,
           },
         ])
         setSessionId(data.session_id)
@@ -187,7 +197,7 @@ function App() {
       }
       setIsLoading(false)
     }
-  }, [input, isLoading, selectedAgent, sessionId, ws])
+  }, [input, isLoading, selectedAgent, sessionId, ws, agents])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -200,6 +210,9 @@ function App() {
     setMessages([])
     setSessionId(null)
   }
+
+  const activeAgent = selectedAgent || agents[0]?.name || 'assistant'
+  const activeAgentMeta = agents.find((a) => a.name === activeAgent)
 
   return (
     <div className="flex h-screen bg-slate-900">
@@ -231,14 +244,28 @@ function App() {
               <button
                 key={agent.name}
                 onClick={() => setSelectedAgent(agent.name)}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                  selectedAgent === agent.name
-                    ? 'bg-primary-500/20 text-primary-300 border border-primary-500/30'
-                    : 'hover:bg-slate-700 text-slate-300'
+                className={`w-full text-left p-3 rounded-lg transition-all border ${
+                  activeAgent === agent.name
+                    ? 'bg-gradient-to-r from-primary-500/20 to-primary-400/10 text-primary-100 border-primary-500/40 shadow-lg shadow-primary-900/40'
+                    : 'hover:bg-slate-700/60 text-slate-300 border-slate-700'
                 }`}
               >
-                <Cpu className="w-4 h-4" />
-                <span className="text-sm font-medium">{agent.name}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-slate-800/80">
+                      <Cpu className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{agent.name}</p>
+                      <p className="text-xs text-slate-400 line-clamp-2">
+                        {agent.description}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase px-2 py-1 rounded-full bg-slate-900/60 border border-slate-700 text-slate-200">
+                    {agent.model}
+                  </span>
+                </div>
               </button>
             ))}
           </div>
@@ -280,7 +307,7 @@ function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="h-14 border-b border-slate-700 flex items-center justify-between px-4 bg-slate-800/50">
+        <header className="h-14 border-b border-slate-700 flex items-center justify-between px-4 bg-slate-800/60 backdrop-blur">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -300,9 +327,14 @@ function App() {
                     : 'bg-yellow-500'
                 }`}
               />
-              <span className="text-sm text-slate-400">
-                {selectedAgent} agent
-              </span>
+              <div>
+                <p className="text-sm text-slate-300 font-semibold">
+                  {activeAgent}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {activeAgentMeta?.model || 'gemini'} · {activeAgentMeta?.description || 'Adaptive Gemini agent'}
+                </p>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -315,6 +347,64 @@ function App() {
             </button>
           </div>
         </header>
+
+        {/* Hero banner */}
+        <div className="px-4 pt-4">
+          <div className="rounded-2xl border border-primary-500/30 bg-gradient-to-r from-primary-500/20 via-slate-800/80 to-slate-900 shadow-xl shadow-primary-900/40 p-4 md:p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-primary-200">Gemini Control Room</p>
+                <h2 className="text-2xl md:text-3xl font-bold mt-1">Multi-agent command deck</h2>
+                <p className="text-sm text-slate-300 mt-2 max-w-2xl">
+                  Planner (Gemini 3.0 Pro), Executor (Gemini 2.5 Pro), and Research Flash (Gemini 2.5 Flash) collaborate with the full Gemini tool stack for flawless delivery.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-right text-xs text-slate-200">
+                <div className="px-3 py-2 rounded-lg bg-slate-900/50 border border-slate-700">
+                  <p className="text-slate-400">Current agent</p>
+                  <p className="font-semibold">{activeAgent}</p>
+                </div>
+                <div className="px-3 py-2 rounded-lg bg-slate-900/50 border border-slate-700">
+                  <p className="text-slate-400">Model</p>
+                  <p className="font-semibold">{activeAgentMeta?.model || 'gemini'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Agent summary grid */}
+        <div className="px-4 mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          {agents.map((agent) => (
+            <div
+              key={agent.name}
+              className={`rounded-xl border p-3 bg-slate-800/60 backdrop-blur ${
+                activeAgent === agent.name
+                  ? 'border-primary-500/50 shadow-lg shadow-primary-900/40'
+                  : 'border-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-slate-900/70">
+                    <Layers className="w-4 h-4 text-primary-300" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{agent.name}</p>
+                    <p className="text-xs text-slate-400 line-clamp-2">{agent.description}</p>
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-1 rounded-full bg-primary-500/20 border border-primary-500/40 text-primary-100">
+                  {agent.model}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-3 text-[11px] text-slate-300">
+                <Zap className="w-3 h-3" />
+                <span>Gemini HEK/AGK toolchain ready</span>
+              </div>
+            </div>
+          ))}
+        </div>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
