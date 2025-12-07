@@ -6,14 +6,9 @@ import {
   Code,
   FileText,
   Terminal,
-  Plus,
   X,
   ChevronRight,
   Cpu,
-  Zap,
-  Layers,
-  Play,
-  Square,
   RotateCcw,
 } from 'lucide-react'
 
