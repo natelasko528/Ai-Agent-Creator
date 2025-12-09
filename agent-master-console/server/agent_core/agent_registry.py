@@ -1,7 +1,7 @@
 import uuid
 import json
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 class AgentRegistry:
     """
@@ -43,3 +43,61 @@ class AgentRegistry:
             raise FileNotFoundError(f"Agent {agent_id} not found")
         with open(fpath, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def update_agent(self, agent_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update an existing agent and return the updated record.
+
+        This method works with dictionaries (the format returned by get_agent)
+        instead of trying to access attributes on objects. Only provided fields
+        are updated; missing fields are left as-is.
+        """
+        fpath = self._agent_path(agent_id)
+        if not os.path.exists(fpath):
+            raise FileNotFoundError(f"Agent {agent_id} not found")
+
+        with open(fpath, "r", encoding="utf-8") as f:
+            agent = json.load(f)
+
+        for key, value in updates.items():
+            if value is not None:
+                agent[key] = value
+
+        with open(fpath, "w", encoding="utf-8") as f:
+            json.dump(agent, f, indent=2)
+
+        return agent
+
+    def get_agent_tree(self, root_agent_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Return a minimal agent tree for the given root agent.
+
+        The current implementation has no persisted hierarchy, but this method
+        still returns a consistent dictionary shape and uses dictionary access
+        to avoid AttributeError when called.
+        """
+        try:
+            agent = self.get_agent(root_agent_id)
+        except FileNotFoundError:
+            return None
+
+        return {
+            "id": agent.get("id"),
+            "name": agent.get("name"),
+            "model": agent.get("model"),
+            "children": [],  # Placeholder until hierarchy is implemented
+        }
+
+    def find_delegation_chain(self, task_type: str, root_agent_id: str) -> List[str]:
+        """
+        Return a delegation chain starting from the root agent.
+
+        Uses dictionary keys instead of attribute access to avoid runtime errors.
+        The simplified implementation returns the root agent id when present.
+        """
+        try:
+            agent = self.get_agent(root_agent_id)
+        except FileNotFoundError:
+            return []
+
+        return [agent.get("id")]

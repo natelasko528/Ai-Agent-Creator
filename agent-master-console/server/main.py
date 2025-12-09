@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +17,15 @@ class AgentCreate(BaseModel):
 
 class Agent(AgentCreate):
     id: str
+
+
+class AgentUpdate(BaseModel):
+    """Partial update payload for an agent."""
+
+    name: Optional[constr(min_length=1, max_length=100)] = None
+    model: Optional[constr(min_length=1)] = None
+    system_prompt: Optional[constr(min_length=1)] = None
+    tools: Optional[List[constr(min_length=1)]] = None
 
 
 app = FastAPI(title="Agent Master Console API")
@@ -46,6 +55,18 @@ def list_agents():
 @app.post("/agents", response_model=Agent, status_code=201)
 def create_agent(config: AgentCreate):
     return registry.create_agent(config.model_dump())
+
+
+@app.put("/agents/{agent_id}", response_model=Agent)
+def update_agent(agent_id: str, updates: AgentUpdate):
+    """
+    Update an agent and return the full updated record.
+    """
+    try:
+        updated = registry.update_agent(agent_id, updates.model_dump(exclude_none=True))
+        return updated
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @app.get("/agents/{agent_id}", response_model=Agent)
